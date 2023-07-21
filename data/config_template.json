@@ -1,0 +1,22 @@
+{
+    "not-headless": false,
+    "data-folder": "./data",
+    "sports": [
+        "FOOTBALL"
+    ],
+    "countries": [
+        "England",
+        "Spain",
+        "Italy",
+        "Germany",
+        "France"
+    ],
+    "leagues": [
+        "Premier League",
+        "Champions League",
+        "LaLiga",
+        "Serie A",
+        "Bundesliga",
+        "Ligue 1"
+    ]
+}
