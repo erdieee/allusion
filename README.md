@@ -15,6 +15,8 @@ List available commands with
 
 ```bash
 python3 allusion --help
+#or just
+allusion --help
 ```
 Output:
 ```
@@ -37,9 +39,14 @@ options:
 Clone the repo and run
 ```bash
 python3 -m pip install -r requirements.txt
+python3 -m pip install -e .
 python3 -m playwright install
 ```
 
-You will need to create a config file.
+You will need to create a config file, with the command
+```bash
+allusion create-config
+```
+
 
 **Note**: It is recommended to use a [virtual environment](https://docs.python.org/3/library/venv.html).
