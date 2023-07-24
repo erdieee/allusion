@@ -8,6 +8,16 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+def flatten_dicts(nested_list):
+    result = []
+    for item in nested_list:
+        if isinstance(item, dict):
+            result.append(item)
+        elif isinstance(item, list):
+            result.extend(flatten_dicts(item))
+    return result
+
+
 def store_dict_to_json(data: Dict[str, Any], file_name: str) -> None:
     with open(file_name, "w") as json_file:
         json.dump(data, json_file, indent=4)
