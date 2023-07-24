@@ -1,16 +1,23 @@
+import asyncio
 import logging
 import re
+import time
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pandas as pd
 from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright
 from playwright.sync_api import sync_playwright
 
 from allusion.constants import countries as available_countries
 from allusion.constants import sports as available_sports
-from allusion.utils import load_json_to_dict, parse_date, store_dict_to_json
+from allusion.utils import (
+    flatten_dicts,
+    load_json_to_dict,
+    parse_date,
+    store_dict_to_json,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +35,9 @@ class Scraper:
         self._leagues: Dict[str, Dict[str, Dict[str, str]]] = {}
         self.headless = self._config.get("not_headless", True)
         self._force_reload = False
+
+        self.loop = asyncio.get_event_loop()
+        asyncio.set_event_loop(self.loop)
 
     def __repr__(self) -> str:
         return f"Scraper of {self.main_url}"
@@ -203,122 +213,159 @@ class Scraper:
         store_dict_to_json(temp, self._leagues_file)
         return temp
 
-    def _get_odds_from_league(self, url, page, sport, country, league) -> pd.DataFrame:
+    async def _get_odds_from_league(self, url, page, sport, country, league, context):
         logger.info(f"Getting odds from {url}")
-        page.goto(url)
-        page.wait_for_load_state("networkidle")
+        await page.goto(url)
+        await page.wait_for_load_state("networkidle")
         # page.get_by_role("button", name="I Accept").click()
         main_div = page.get_by_role("main")
         matches = []
-        for link in main_div.get_by_role("link").all():
-            match = link.inner_text().strip()
-            if re.match(r"^\d", match):
-                matches.append(f'{self.main_url}{link.get_attribute("href")}')
+        for link in await main_div.get_by_role("link").all():
+            match_await = await link.inner_text()
+            match = match_await.strip()
+            link_await = await link.get_attribute("href")
+            # print(match)
+            # if re.match(r"^\d", match):
+            if re.search(r"-", link_await) and re.search(r"\d", link_await):
+                matches.append(f"{self.main_url}{link_await}")
         tmp = {"sport": sport, "country": country, "league": league}
-
-        full_data = []
+        await page.close()
+        tasks = []
         for match in matches:
-            data = self._get_odds_from_match(match, page)
-            if not data:
-                continue
-            for d in data:
-                d.update(tmp)
-                full_data.append(d)
+            page = await context.new_page()
+            tasks.append(self._get_odds_from_match(match, page, tmp))
+        # await asyncio.sleep(0.5)  # sleep 0.5 sec to decrease load
+        return await asyncio.gather(*tasks)
+
+    async def _get_odds_from_match(
+        self, match, page, extra_data
+    ) -> List[Dict[str, Any]]:
         try:
-            df = pd.DataFrame(full_data)
-            return df
-        except Exception as e:
-            logger.warning(f"Could not create dataframe. Error: {e}")
-            # print(full_data)
-            return pd.DataFrame()
+            logger.info(f"Scraping {match}...")
+            await page.goto(match)
+            await page.wait_for_load_state("networkidle")
+            if (
+                not await page.locator("span")
+                .filter(has_text="1X2")
+                .locator("div")
+                .is_visible()
+            ):
+                logger.warning(f"No data found for {match}")
+                await page.close()
+                return []
+            await page.locator("span").filter(has_text="1X2").locator("div").click()
+            await page.get_by_text("Full Time", exact=True).click()
+            await page.wait_for_load_state("networkidle")
+            await page.wait_for_selector("div[data-v-4905fa49]")
 
-    def _get_odds_from_match(self, match, page) -> List[Dict[str, Any]]:
-        logger.info(f"scraping {match}")
-        page.goto(match)
-        page.wait_for_load_state("networkidle")
-        if not page.locator("span").filter(has_text="1X2").locator("div").is_visible():
-            logger.warning(f"No data found for {match}")
-            return []
-        page.locator("span").filter(has_text="1X2").locator("div").click()
-        page.get_by_text("Full Time", exact=True).click()
-        page.wait_for_load_state("networkidle")
-        page.wait_for_selector("div[data-v-4905fa49]")
-
-        content = page.content()
-        soup = BeautifulSoup(content, "html.parser")
-        data = []
-        play_time = (
-            "flex text-xs font-normal text-gray-dark font-main item-center gap-1"
-        )
-        players = "min-md:bg-white-main bg-gray-light mb-3 flex h-auto w-full items-center truncate py-2"
-        time = None
-        try:
-            times = soup.find("div", class_=play_time).find_all("p")  # type: ignore
-            time = "".join([t.text.strip() for t in times])
-            time = parse_date(time)
-            match_players = soup.find("div", class_=players).find("p").text  # type: ignore
-            parse_home_away = match_players.split("-")
-            home_player = parse_home_away[0].strip()
-            away_player = parse_home_away[1].strip()
-            books = "flex text-xs border-b h-9 border-l border-r"
-            books = soup.find_all("div", class_=books)
-            for book in books:
-                temp = {}
-                odds_type = iter(["home_odds", "draw_odds", "away_odds"])
-                anchors = book.find_all("a")
-                name = ""
-                for a in anchors:
-                    try:
-                        name = a.find("p").text.split(".")[0]
-                    except:
+            content = await page.content()
+            await page.close()
+            soup = BeautifulSoup(content, "html.parser")
+            data = []
+            play_time = (
+                "flex text-xs font-normal text-gray-dark font-main item-center gap-1"
+            )
+            players = "min-md:bg-white-main bg-gray-light mb-3 flex h-auto w-full items-center truncate py-2"
+            time = None
+            try:
+                times = soup.find("div", class_=play_time).find_all("p")  # type: ignore
+                time = "".join([t.text.strip() for t in times])
+                time = parse_date(time)
+                match_players = soup.find("div", class_=players).find("p").text  # type: ignore
+                parse_home_away = match_players.split("-")
+                home_player = parse_home_away[0].strip()
+                away_player = parse_home_away[1].strip()
+                books = "flex text-xs border-b h-9 border-l border-r"
+                books = soup.find_all("div", class_=books)
+                for book in books:
+                    temp = {}
+                    odds_type = iter(["home_odds", "draw_odds", "away_odds"])
+                    anchors = book.find_all("a")
+                    name = ""
+                    for a in anchors:
+                        try:
+                            name = a.find("p").text.split(".")[0]
+                        except:
+                            continue
+                    if not name:
                         continue
-                if not name:
-                    continue
-                temp["book"] = name.lower()
-                temp["match_time"] = time
-                temp["update_time"] = datetime.utcnow().isoformat()
-                temp["match"] = match_players
-                temp["home"] = home_player
-                temp["away"] = away_player
-                odds = book.find_all("p")
-                for odd in odds:
-                    tmp = odd.text
-                    if name in tmp:
-                        continue
-                    temp[next(odds_type)] = float(tmp)
-                data.append(temp)
+                    temp["book"] = name.lower()
+                    temp["match_time"] = time
+                    temp["update_time"] = datetime.utcnow().isoformat()
+                    temp["match"] = match_players
+                    temp["home"] = home_player
+                    temp["away"] = away_player
+                    odds = book.find_all("p")
+                    for odd in odds:
+                        tmp = odd.text
+                        if name in tmp:
+                            continue
+                        temp[next(odds_type)] = float(tmp)
+                    temp.update(extra_data)
+                    data.append(temp)
+            except Exception as e:
+                logger.warning(e)
+                return []
+
+            return data
         except Exception as e:
-            logger.warning(e)
+            logger.warning(f"Unable to fetch data from {match}. Returning")
             return []
 
-        return data
-
-    def get_odds(self) -> pd.DataFrame:
+    async def _scrape_odds(self):
         logger.info("Scraping odds now...")
-        if (reload := self._config.get("reload_file_data", None)) is not None:
-            getattr(self, f"_load_{reload}")()
-        if not self._leagues:
-            self._load_leagues()
         data = self._leagues
         logger.debug(f"Getting odds for: {data}")
-        df = pd.DataFrame()
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=self.headless)
-            context = browser.new_context()
-            page = context.new_page()
+        results = []
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=self.headless)
+            context = await browser.new_context()
             for sport, countries in data.items():
                 for country, leagues in countries.items():
+                    tasks = []
                     for league, url in leagues.items():
-                        temp = self._get_odds_from_league(
-                            url, page, sport, country, league
+                        page = await context.new_page()
+                        tasks.append(
+                            self._get_odds_from_league(
+                                url=url,
+                                page=page,
+                                sport=sport,
+                                country=country,
+                                league=league,
+                                context=context,
+                            )
                         )
-                        if df.empty:
-                            df = temp
-                        else:
-                            try:
-                                df = pd.concat([df, temp], ignore_index=True)
-                            except Exception as e:
-                                logger.warning(e)
-                                continue
+                    res = await asyncio.gather(*tasks)
+                    results.append(res)
 
-        return df
+        return results
+
+    def get_odds(self) -> pd.DataFrame:
+        if (reload := self._config.get("reload_file_data", None)) is not None:
+            if reload == "all":
+                self._load_sports()
+            else:
+                getattr(self, f"_load_{reload}")()
+        if not self._leagues:
+            self._load_leagues()
+        try:
+            start_scrape = time.perf_counter()
+            odds = self.loop.run_until_complete(self._scrape_odds())
+            # print(odds)
+            store_dict_to_json(odds, "gather_res.json")  # type: ignore
+            end_scrape = time.perf_counter()
+            logger.info(f"Scraping odds took {end_scrape - start_scrape:3f} seconds.")
+        except Exception as e:
+            logger.warning(e)
+            return pd.DataFrame()
+
+        odds = flatten_dicts(odds)
+        try:
+            df = pd.DataFrame(odds)
+            logger.debug(f"Datafram after scraping odds:\n {df}")
+            return df
+        except Exception as e:
+            logger.warning(
+                f"Could not create dataframe from retrived odds. Error: {e}."
+            )
+            return pd.DataFrame()
