@@ -11,7 +11,7 @@ After saving the dataframe, you can take a deeper look and manipulate it in a ju
 
 You can take a look at the process of scraping the odds by providing the `not-headless` option. However it is recommended to scrape without `not-headless`, in order to speed up the scraping process. 
 
-**Note** While scraping multiple browser pages are loaded at once. If your CPU is slow, your machine might freeze or function slower until the scraping is done.
+**Note** While scraping multiple browser pages are loaded at once. If your CPU is slow, your machine might freeze or function slower until the scraping is done. Thus you might want to lower the amount of `sports/countries/leagues` to scrape.
 
 
 ## Commands
