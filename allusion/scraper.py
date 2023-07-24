@@ -1,12 +1,9 @@
 import asyncio
 import logging
-from os import wait
 import re
 import time
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-from unittest import result
+from typing import Any, Dict, List
 
 import pandas as pd
 from bs4 import BeautifulSoup

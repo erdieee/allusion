@@ -1,5 +1,4 @@
 from typing import Any, Dict
-from allusion import scraper
 
 from allusion.configuration import Configuration
 from allusion.scraper import Scraper
