@@ -9,7 +9,11 @@ Note that not all rows are displayed in the image above.
 
 After saving the dataframe, you can take a deeper look and manipulate it in a jupyter notebook.
 
-You can take a look at the process of scraping the odds by providing the `not-headless` option. Check out the commands 
+You can take a look at the process of scraping the odds by providing the `not-headless` option. However it is recommended to scrape without `not-headless`, in order to speed up the scraping process. 
+
+**Note** While scraping multiple browser pages are loaded at once. If your CPU is slow, your machine might freeze or function slower until the scraping is done.
+
+
 ## Commands
 List available commands with
 
