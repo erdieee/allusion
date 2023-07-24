@@ -1,14 +1,14 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 
-def flatten_dicts(nested_list):
+def flatten_dicts(nested_list: List[Any]) -> List[Dict[str, Any]]:
     result = []
     for item in nested_list:
         if isinstance(item, dict):
@@ -29,7 +29,7 @@ def load_json_to_dict(file_name: str) -> Dict[str, Any]:
     return data
 
 
-def parse_date(date_string: str, date_format: Optional[str] = None):
+def parse_date(date_string: str, date_format: Optional[str] = None) -> str:
     if not date_format:
         date_format = "%A,%d %b %Y,%H:%M"
     date_string = date_string.replace("  ", " ")
@@ -37,9 +37,9 @@ def parse_date(date_string: str, date_format: Optional[str] = None):
     return datetime_obj
 
 
-def _df_best_odds(df):
+def _df_best_odds(df: pd.DataFrame) -> pd.DataFrame:
     odds_columns = [col for col in df.columns if "odds" in col]
-    tmp = df.drop(odds_columns, axis=1).drop("book", axis=1).iloc[0]
+    tmp = df.drop(odds_columns, axis=1).drop("book", axis=1).head(1)
     for col in odds_columns:
         max_row_idx = df[col].idxmax()
         max_value = df.at[max_row_idx, col]
@@ -51,7 +51,7 @@ def _df_best_odds(df):
     return tmp
 
 
-def get_df_best_odds(df):
+def get_df_best_odds(df: pd.DataFrame) -> pd.DataFrame:
     new_df = pd.DataFrame()
     leagues = df["league"].unique()
     for league in leagues:
@@ -63,12 +63,12 @@ def get_df_best_odds(df):
             if new_df.empty:
                 new_df = tmp
             else:
-                new_df = pd.concat([new_df, tmp], axis=1)
-    new_df = new_df.T.reset_index(drop=True)
+                new_df = pd.concat([new_df, tmp])
+    new_df = new_df.reset_index(drop=True)
     return new_df
 
 
-def check_arbitrage(df):
+def check_arbitrage(df: pd.DataFrame) -> pd.DataFrame:
     odds_columns = [col for col in df.columns if "odds" in col]
     reciprocal_df = 1 / df[odds_columns]
     df["reciprocal_sum"] = reciprocal_df.sum(axis=1)

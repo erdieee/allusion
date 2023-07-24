@@ -1,6 +1,7 @@
 data/*
 *.json
 *.ipynb
+*.csv
 # exception to the rule
 !data/config_template.json 
 
