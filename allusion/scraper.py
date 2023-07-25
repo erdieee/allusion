@@ -270,6 +270,8 @@ class Scraper:
             try:
                 times = soup.find("div", class_=play_time).find_all("p")  # type: ignore
                 time = "".join([t.text.strip() for t in times])
+                time = time.split(",")[1:]
+                time = ",".join(time)
                 time = parse_date(time)
                 match_players = soup.find("div", class_=players).find("p").text  # type: ignore
                 parse_home_away = match_players.split("-")

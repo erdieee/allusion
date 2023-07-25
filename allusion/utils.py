@@ -31,7 +31,7 @@ def load_json_to_dict(file_name: str) -> Dict[str, Any]:
 
 def parse_date(date_string: str, date_format: Optional[str] = None) -> str:
     if not date_format:
-        date_format = "%A,%d %b %Y,%H:%M"
+        date_format = "%d %b %Y,%H:%M"
     date_string = date_string.replace("  ", " ")
     datetime_obj = datetime.strptime(date_string, date_format).isoformat()
     return datetime_obj
