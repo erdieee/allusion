@@ -234,8 +234,57 @@ class Scraper:
         for match in matches:
             page = await context.new_page()
             tasks.append(self._get_odds_from_match(match, page, tmp))
-        # await asyncio.sleep(0.5)  # sleep 0.5 sec to decrease load
         return await asyncio.gather(*tasks)
+
+    async def _parse_match(self, content, extra_data) -> List[Dict[str, Any]]:
+        soup = BeautifulSoup(content, "html.parser")
+        data = []
+        play_time = (
+            "flex text-xs font-normal text-gray-dark font-main item-center gap-1"
+        )
+        players = "min-md:bg-white-main bg-gray-light mb-3 flex h-auto w-full items-center truncate py-2"
+        books = "flex text-xs border-b h-9 border-l border-r"
+        time = None
+        try:
+            time = soup.find("div", class_=play_time).find_all("p")  # type: ignore
+            time = "".join([t.text.strip() for t in time])
+            time = time.split(",")[1:]
+            time = ",".join(time)
+            time = parse_date(time)
+            match_players = soup.find("div", class_=players).find("p").text  # type: ignore
+            parse_home_away = match_players.split("-")
+            home_player = parse_home_away[0].strip()
+            away_player = parse_home_away[1].strip()
+            books = soup.find_all("div", class_=books)
+            for book in books:
+                temp = {}
+                odds_type = iter(["home_odds", "draw_odds", "away_odds"])
+                name = ""
+                for a in book.find_all("a"):
+                    try:
+                        name = a.find("p").text.split(".")[0]
+                    except:
+                        continue
+                if not name:
+                    continue
+                temp["book"] = name.lower()
+                temp["match_time"] = time
+                temp["update_time"] = datetime.utcnow().isoformat()
+                temp["match"] = match_players
+                temp["home"] = home_player
+                temp["away"] = away_player
+                odds = book.find_all("p")
+                for odd in odds:
+                    tmp = odd.text
+                    if name in tmp:
+                        continue
+                    temp[next(odds_type)] = float(tmp)
+                temp.update(extra_data)
+                data.append(temp)
+        except Exception as e:
+            logger.warning(e)
+            return []
+        return data
 
     async def _get_odds_from_match(
         self, match, page, extra_data
@@ -260,56 +309,8 @@ class Scraper:
 
             content = await page.content()
             await page.close()
-            soup = BeautifulSoup(content, "html.parser")
-            data = []
-            play_time = (
-                "flex text-xs font-normal text-gray-dark font-main item-center gap-1"
-            )
-            players = "min-md:bg-white-main bg-gray-light mb-3 flex h-auto w-full items-center truncate py-2"
-            time = None
-            try:
-                times = soup.find("div", class_=play_time).find_all("p")  # type: ignore
-                time = "".join([t.text.strip() for t in times])
-                time = time.split(",")[1:]
-                time = ",".join(time)
-                time = parse_date(time)
-                match_players = soup.find("div", class_=players).find("p").text  # type: ignore
-                parse_home_away = match_players.split("-")
-                home_player = parse_home_away[0].strip()
-                away_player = parse_home_away[1].strip()
-                books = "flex text-xs border-b h-9 border-l border-r"
-                books = soup.find_all("div", class_=books)
-                for book in books:
-                    temp = {}
-                    odds_type = iter(["home_odds", "draw_odds", "away_odds"])
-                    anchors = book.find_all("a")
-                    name = ""
-                    for a in anchors:
-                        try:
-                            name = a.find("p").text.split(".")[0]
-                        except:
-                            continue
-                    if not name:
-                        continue
-                    temp["book"] = name.lower()
-                    temp["match_time"] = time
-                    temp["update_time"] = datetime.utcnow().isoformat()
-                    temp["match"] = match_players
-                    temp["home"] = home_player
-                    temp["away"] = away_player
-                    odds = book.find_all("p")
-                    for odd in odds:
-                        tmp = odd.text
-                        if name in tmp:
-                            continue
-                        temp[next(odds_type)] = float(tmp)
-                    temp.update(extra_data)
-                    data.append(temp)
-            except Exception as e:
-                logger.warning(e)
-                return []
+            return await self._parse_match(content, extra_data)
 
-            return data
         except Exception as e:
             logger.warning(f"Unable to fetch data from {match}. Returning")
             return []
