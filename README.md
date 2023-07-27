@@ -5,7 +5,10 @@ Scrape all desired sports and odds from [Oddsportal](https://www.oddsportal.com/
 ## Example scraped data
 Example output of `scrape-once`. 
 ![Example output of scrape-once](./img/example_scrape.png)
-Note that not all rows are displayed in the image above.
+
+The following image depicts three arbitrage opportunities found after scraping
+![Example arbitrage](./img/arbitrage_example.png)
+Not all rows are displayed in the images above.
 
 After saving the dataframe, you can take a deeper look and manipulate it in a jupyter notebook.
 
