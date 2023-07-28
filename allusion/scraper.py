@@ -255,28 +255,37 @@ class Scraper:
             parse_home_away = match_players.split("-")
             home_player = parse_home_away[0].strip()
             away_player = parse_home_away[1].strip()
+            extra_data.update(
+                {
+                    "match_time": time,
+                    "match": match_players,
+                    "home": home_player,
+                    "away": away_player,
+                }
+            )
             books = soup.find_all("div", class_=books)
             for book in books:
                 temp = {}
                 odds_type = iter(["home_odds", "draw_odds", "away_odds"])
-                name = ""
+                book_name = ""
                 for a in book.find_all("a"):
                     try:
-                        name = a.find("p").text.split(".")[0]
+                        book_name = a.find("p").text.split(".")[0]
                     except:
                         continue
-                if not name:
+                if not book_name:
                     continue
-                temp["book"] = name.lower()
-                temp["match_time"] = time
+                temp["book"] = book_name.lower()
                 temp["update_time"] = datetime.utcnow().isoformat()
-                temp["match"] = match_players
-                temp["home"] = home_player
-                temp["away"] = away_player
                 odds = book.find_all("p")
+                if any([("line-through" in odd["class"]) for odd in odds]):
+                    logger.info(
+                        f"Odds for book {book_name} on match {match_players} is outdated. Skipping these odds.."
+                    )
+                    continue
                 for odd in odds:
                     tmp = odd.text
-                    if name in tmp:
+                    if book_name in tmp:
                         continue
                     temp[next(odds_type)] = float(tmp)
                 temp.update(extra_data)
