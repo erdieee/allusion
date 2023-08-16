@@ -12,7 +12,7 @@ def create_config(args: Dict[str, Any]) -> None:
         "not-headless": False,
         "data-folder": f"{Path.cwd()}/data",
         "sports": ["FOOTBALL"],
-        "countries": ["England", "Spain", "Italy", "Germany"],
+        "countries": ["England", "Spain", "Italy", "Germany", "Europe"],
         "leagues": [
             "Premier League",
             "Champions League",

@@ -322,6 +322,7 @@ class Scraper:
 
         except Exception as e:
             logger.warning(f"Unable to fetch data from {match}. Returning")
+            await page.close()
             return []
 
     async def _scrape_odds(self):
